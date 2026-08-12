@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Redis Permission Check</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: #090b10;
+    color: #f5f5f5;
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    padding: 30px 16px;
+}
+
+.container {
+    width: min(850px, 100%);
+    margin: auto;
+}
+
+h1 {
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #858d9c;
+    margin-bottom: 25px;
+}
+
+.nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid #292e38;
+}
+
+.nav-item {
+    background: transparent;
+    border: 0;
+    color: #858d9c;
+    padding: 11px 18px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+}
+
+.nav-item:hover {
+    color: #f5f5f5;
+}
+
+.nav-item.active {
+    color: #ff4747;
+    border-bottom-color: #ff4747;
+}
+
+.section {
+    display: none;
+}
+
+.section.active {
+    display: block;
+}
+
+.card {
+    background: #12151c;
+    border: 1px solid #292e38;
+    border-radius: 15px;
+    padding: 22px;
+    margin-bottom: 18px;
+}
+
+.connection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media(max-width:600px) {
+    .connection {
+        grid-template-columns: 1fr;
+    }
+}
+
+.info {
+    background: #0b0e13;
+    border: 1px solid #282e38;
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.label {
+    color: #737c8b;
+    font-size: 11px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.value {
+    font-weight: 700;
+    word-break: break-all;
+}
+
+.field-label {
+    color: #737c8b;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.key-hint {
+    color: #5b6472;
+    font-size: 11px;
+    margin: -6px 0 16px;
+}
+
+input[type="text"] {
+    width: 100%;
+    background: #0b0e13;
+    border: 1px solid #282e38;
+    border-radius: 8px;
+    color: #f5f5f5;
+    padding: 11px 13px;
+    font-size: 14px;
+    margin-bottom: 4px;
+    font-family: inherit;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #ff4747;
+}
+
+button {
+    margin-top: 20px;
+    background: #ff4747;
+    border: 0;
+    color: white;
+    font-weight: 800;
+    padding: 13px 20px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+button:hover {
+    background: #ff5e5e;
+}
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.summary {
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+    display: none;
+}
+
+.summary.show {
+    display: block;
+}
+
+.summary.good {
+    background: rgba(40, 180, 100, .08);
+    border: 1px solid #285d40;
+    color: #72dda1;
+}
+
+.summary.bad {
+    background: rgba(220, 60, 60, .08);
+    border: 1px solid #673131;
+    color: #ff9292;
+}
+
+.test {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    background: #0c0f14;
+    border: 1px solid #282e38;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.test-name {
+    font-weight: 800;
+}
+
+.test-message {
+    color: #7f8896;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.badge {
+    min-width: 90px;
+    text-align: center;
+    padding: 6px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.allowed {
+    background: rgba(40, 190, 110, .12);
+    color: #70dda0;
+    border: 1px solid #285d40;
+}
+
+.denied {
+    background: rgba(230, 70, 70, .12);
+    color: #ff8b8b;
+    border: 1px solid #673131;
+}
+
+.failed {
+    background: rgba(230, 170, 50, .1);
+    color: #e6c66f;
+    border: 1px solid #665525;
+}
+
+.latency {
+    color: #8b94a2;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+pre {
+    background: #080a0e;
+    border: 1px solid #252a32;
+    padding: 15px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12px;
+    color: #8992a0;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Redis Permission Check</h1>
+
+<div class="subtitle">
+Check what the supplied Redis user is actually allowed to do.
+</div>
+
+<div class="nav" id="nav">
+<button class="nav-item active" data-section="connection">Connection</button>
+<button class="nav-item" data-section="get">Get</button>
+<button class="nav-item" data-section="set">Set</button>
+<button class="nav-item" data-section="delete">Delete</button>
+</div>
+
+<!-- Connection -->
+<div class="section active" id="section-connection">
+
+<div class="card">
+
+<div class="connection">
+
+<div class="info">
+<div class="label">Host</div>
+<div class="value" id="host-value">-</div>
+</div>
+
+<div class="info">
+<div class="label">Port</div>
+<div class="value" id="port-value">-</div>
+</div>
+
+<div class="info">
+<div class="label">Username</div>
+<div class="value" id="username-value">-</div>
+</div>
+
+<div class="info">
+<div class="label">Security</div>
+<div class="value" id="security-value">-</div>
+</div>
+
+</div>
+
+<button id="check">
+Check Redis Permissions
+</button>
+
+</div>
+
+<div id="summary" class="summary"></div>
+
+<div id="results" class="card" style="display:none;">
+<h3>Permission Results</h3>
+<div id="tests"></div>
+</div>
+
+<div id="details" class="card" style="display:none;">
+<h3>Technical Details</h3>
+<pre id="json"></pre>
+</div>
+
+</div>
+
+<!-- Get -->
+<div class="section" id="section-get">
+
+<div class="card">
+<div class="field-label">Key</div>
+<input type="text" id="get-key" placeholder="e.g. mytest">
+<div class="key-hint">Stored under <code>redis-speed-test:&lt;key&gt;</code> — matches the ACL's allowed key pattern.</div>
+<button id="get-btn">Get Value</button>
+</div>
+
+<div id="get-result"></div>
+
+</div>
+
+<!-- Set -->
+<div class="section" id="section-set">
+
+<div class="card">
+<div class="field-label">Key</div>
+<input type="text" id="set-key" placeholder="e.g. mytest">
+<div class="key-hint">Stored under <code>redis-speed-test:&lt;key&gt;</code> — matches the ACL's allowed key pattern.</div>
+<div class="field-label">Value</div>
+<input type="text" id="set-value" placeholder="e.g. hello world">
+<button id="set-btn">Set Value</button>
+</div>
+
+<div id="set-result"></div>
+
+</div>
+
+<!-- Delete -->
+<div class="section" id="section-delete">
+
+<div class="card">
+<div class="field-label">Key</div>
+<input type="text" id="delete-key" placeholder="e.g. mytest">
+<div class="key-hint">Stored under <code>redis-speed-test:&lt;key&gt;</code> — matches the ACL's allowed key pattern.</div>
+<button id="delete-btn">Delete Key</button>
+</div>
+
+<div id="delete-result"></div>
+
+</div>
+
+</div>
+
+<script>
+
+/*
+ * Nav switching.
+ */
+document.getElementById("nav").addEventListener("click", (event) => {
+
+    const target = event.target.closest(".nav-item");
+    if (!target) return;
+
+    document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(el => el.classList.remove("active"));
+
+    target.classList.add("active");
+    document.getElementById(`section-${target.dataset.section}`).classList.add("active");
+});
+
+/*
+ * Populate connection info from the server instead of hardcoding it.
+ */
+fetch("/api/health")
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("host-value").textContent = data.redisHost || "-";
+        document.getElementById("port-value").textContent = data.redisPort ?? "-";
+        document.getElementById("username-value").textContent = data.redisUsername || "-";
+        document.getElementById("security-value").textContent = data.tls ? "TLS encrypted" : "Not encrypted";
+    })
+    .catch(() => {});
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function badgeClassFor(status) {
+
+    if (status === "ALLOWED") return "allowed";
+    if (status === "DENIED") return "denied";
+    return "failed";
+}
+
+function buildResultRow(result) {
+
+    const row = document.createElement("div");
+    row.className = "test";
+
+    const latency = result.latencyMs != null
+        ? `<div class="latency">${result.latencyMs} ms</div>`
+        : "";
+
+    row.innerHTML = `
+        <div>
+            <div class="test-name">${escapeHtml(result.test)}</div>
+            <div class="test-message">${escapeHtml(result.message || result.reason || "")}</div>
+            ${latency}
+        </div>
+        <div class="badge ${badgeClassFor(result.status)}">
+            ${escapeHtml(result.status)}
+        </div>
+    `;
+
+    return row;
+}
+
+/*
+ * Connection check (full diagnostic).
+ */
+const checkButton = document.getElementById("check");
+const summary = document.getElementById("summary");
+const results = document.getElementById("results");
+const tests = document.getElementById("tests");
+const details = document.getElementById("details");
+const json = document.getElementById("json");
+
+checkButton.addEventListener("click", async () => {
+
+    checkButton.disabled = true;
+    checkButton.textContent = "Checking Redis...";
+
+    summary.className = "summary";
+    results.style.display = "none";
+    details.style.display = "none";
+    tests.innerHTML = "";
+
+    try {
+
+        const response = await fetch("/api/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        results.style.display = "block";
+
+        for (const result of data.results) {
+            tests.appendChild(buildResultRow(result));
+        }
+
+        if (data.canBenchmark) {
+            summary.className = "summary show good";
+            summary.innerHTML = "<strong>Good news:</strong> This Redis user appears to have enough permissions for the basic benchmark.";
+        } else {
+            summary.className = "summary show bad";
+            summary.innerHTML = "<strong>Benchmark cannot run yet.</strong> At least one required Redis operation is blocked. Send the results below to whoever manages the Redis ACL.";
+        }
+
+        details.style.display = "block";
+        json.textContent = JSON.stringify(data, null, 2);
+
+    } catch (error) {
+
+        summary.className = "summary show bad";
+        summary.textContent = "Diagnostic failed: " + error.message;
+
+    } finally {
+
+        checkButton.disabled = false;
+        checkButton.textContent = "Check Redis Permissions";
+    }
+
+});
+
+/*
+ * Generic single-op handler shared by Get/Set/Delete.
+ */
+async function runOp({ button, resultContainer, url, body }) {
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Working...";
+    resultContainer.innerHTML = "";
+
+    try {
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+
+        if (data.result) {
+            resultContainer.appendChild(buildResultRow(data.result));
+        } else {
+            resultContainer.appendChild(buildResultRow({
+                test: url,
+                status: "FAILED",
+                message: data.error || `HTTP ${response.status}`
+            }));
+        }
+
+    } catch (error) {
+
+        resultContainer.appendChild(buildResultRow({
+            test: url,
+            status: "FAILED",
+            message: error.message
+        }));
+
+    } finally {
+
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+document.getElementById("get-btn").addEventListener("click", () => {
+    runOp({
+        button: document.getElementById("get-btn"),
+        resultContainer: document.getElementById("get-result"),
+        url: "/api/get",
+        body: { key: document.getElementById("get-key").value }
+    });
+});
+
+document.getElementById("set-btn").addEventListener("click", () => {
+    runOp({
+        button: document.getElementById("set-btn"),
+        resultContainer: document.getElementById("set-result"),
+        url: "/api/set",
+        body: {
+            key: document.getElementById("set-key").value,
+            value: document.getElementById("set-value").value
+        }
+    });
+});
+
+document.getElementById("delete-btn").addEventListener("click", () => {
+    runOp({
+        button: document.getElementById("delete-btn"),
+        resultContainer: document.getElementById("delete-result"),
+        url: "/api/delete",
+        body: { key: document.getElementById("delete-key").value }
+    });
+});
+
+</script>
+
+</body>
+</html>
