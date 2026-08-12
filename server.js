@@ -2,8 +2,14 @@ import express from "express";
 import dotenv from "dotenv";
 import { createClient } from "redis";
 import crypto from "crypto";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+//! Resolve relative to this file, not process.cwd() — cwd is unreliable inside
+//! a Vercel serverless function and "public" silently 404s otherwise.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -54,7 +60,7 @@ function basicAuth(req, res, next) {
 
 app.use(express.json());
 app.use(basicAuth);
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 
 const redisConfig = {
     socket: {
